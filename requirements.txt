@@ -1,9 +1,0 @@
-  streamlit
-  streamlit-audiorecorder
-  pydub
-  numpy
-  matplotlib
-  pandas
-  ollama
-  openai-whisper
-  PyPDF2
