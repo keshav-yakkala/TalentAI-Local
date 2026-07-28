@@ -49,10 +49,15 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # ── LLM Provider ────────────────────────────────────────────────────────
-    LLM_PROVIDER: Literal["ollama", "gemini", "openai"] = "ollama"
-    LLM_MODEL: str = "llama3"
+    LLM_PROVIDER: Literal["grok", "ollama", "gemini", "openai"] = "grok"
+    LLM_MODEL: str = "grok-2-latest"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 4096
+
+    # Grok (xAI)
+    GROK_API_KEY: str = ""
+    GROK_BASE_URL: str = "https://api.x.ai/v1"
+    GROK_MODEL: str = "grok-2-latest"
 
     # Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"

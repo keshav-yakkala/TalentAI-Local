@@ -16,25 +16,27 @@ def get_llm_provider() -> BaseLLMProvider:
     Create and return the configured LLM provider singleton.
     Set LLM_PROVIDER env var to switch between: ollama, gemini, openai
     """
-    provider = settings.LLM_PROVIDER.lower()
+    if provider in ("grok", "xai"):
+        from app.ai.llms.grok_provider import GrokProvider
+        return GrokProvider()
 
-    if provider == "ollama":
+    elif provider == "ollama":
         from app.ai.llms.ollama_provider import OllamaProvider
         return OllamaProvider()
 
     elif provider == "gemini":
         # TODO Phase 3+: Implement GeminiProvider
         raise LLMProviderError(
-            "Gemini provider not yet implemented. Set LLM_PROVIDER=ollama for now."
+            "Gemini provider not yet implemented. Set LLM_PROVIDER=grok or ollama."
         )
 
     elif provider == "openai":
         # TODO Phase 3+: Implement OpenAICompatibleProvider
         raise LLMProviderError(
-            "OpenAI-compatible provider not yet implemented. Set LLM_PROVIDER=ollama for now."
+            "OpenAI-compatible provider not yet implemented. Set LLM_PROVIDER=grok or ollama."
         )
 
     else:
         raise LLMProviderError(
-            f"Unknown LLM provider '{provider}'. Valid options: ollama, gemini, openai"
+            f"Unknown LLM provider '{provider}'. Valid options: grok, ollama, gemini, openai"
         )

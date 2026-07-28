@@ -1,21 +1,6 @@
 /**
- * TalentAI — Candidate AI Interview Platform (v2)
- *
- * Powered by Llama 3.2 3B via Ollama (local inference).
- *
- * Flow:
- *   0. Ollama check → show setup if not running
- *   1. Upload resume + job details
- *   2. LLM analyzes profile (understands fresher vs senior from JD)
- *   3. LLM generates adaptive questions (7 questions)
- *   4. Interview: voice or text answers, one question at a time
- *   5. LLM evaluates each answer in real-time
- *   6. LLM generates final report
- *
- * Voice: push-to-talk using Web Speech API.
- *   - Only FINAL transcriptions are kept (no interim word accumulation)
- *   - User can edit the transcribed text before submitting
- *   - "Clear & Re-record" button available
+ * TalentAI — Candidate AI Interview Platform
+ * Powered exclusively by Grok AI (xAI).
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -30,18 +15,16 @@ import {
 } from 'lucide-react'
 import {
   analyzeResume, generateInterviewQuestions, evaluateAnswer,
-  generateFinalReport, extractTextFromFile, OLLAMA_MODEL,
+  generateFinalReport, extractTextFromFile,
   type ResumeAnalysis, type InterviewQuestion,
   type AnswerEvaluation, type InterviewReport,
 } from '@/api/interviewEngine'
-import { checkOllamaStatus, type OllamaStatus } from '@/api/ollamaClient'
+import { GROK_MODEL } from '@/api/grokClient'
 import { useAuthStore } from '@/store/auth'
 import { Link } from 'react-router-dom'
 
 // ── Page-level state machine ──────────────────────────────────────────────────
 type Stage =
-  | 'checking_ollama'   // initial check
-  | 'ollama_error'      // Ollama not available
   | 'upload'            // resume + JD form
   | 'analyzing'         // LLM analyzing resume
   | 'analysis'          // show analysis results
@@ -227,97 +210,6 @@ function ThinkingDots() {
   )
 }
 
-// ── Stage 0: Ollama error screen ──────────────────────────────────────────────
-function OllamaErrorScreen({ status, onRetry }: { status: OllamaStatus; onRetry: () => void }) {
-  const [showDetails, setShowDetails] = useState(false)
-  return (
-    <div className="max-w-xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-8 border border-red-500/20"
-      >
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
-            <Server className="w-6 h-6 text-red-400" />
-          </div>
-          <div>
-            <h2 className="font-outfit text-xl font-bold text-white">
-              {status.running ? 'Model Not Found' : 'Ollama Not Running'}
-            </h2>
-            <p className="text-sm text-slate-400">
-              {status.running
-                ? `Llama 3.2 3B (${OLLAMA_MODEL}) is not installed`
-                : 'Cannot connect to Ollama on port 11434'}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <p className="text-sm text-slate-300">
-            This platform uses <strong className="text-violet-300">Llama 3.2 3B</strong> running locally via Ollama for AI-powered interview analysis. To get started:
-          </p>
-
-          <div className="space-y-3">
-            {!status.running && (
-              <div className="bg-black/30 rounded-xl p-4 border border-white/5">
-                <p className="text-xs text-slate-400 mb-2 font-semibold">Step 1 — Install Ollama</p>
-                <a
-                  href="https://ollama.com/download"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-violet-400 hover:text-violet-300 text-sm underline"
-                >
-                  Download from ollama.com/download →
-                </a>
-              </div>
-            )}
-
-            <div className="bg-black/30 rounded-xl p-4 border border-white/5">
-              <p className="text-xs text-slate-400 mb-2 font-semibold">
-                {status.running ? 'Step 1' : 'Step 2'} — Pull Llama 3.2 3B Model
-              </p>
-              <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-slate-500 shrink-0" />
-                <code className="text-green-400 text-sm font-mono bg-black/40 px-3 py-1 rounded-lg select-all">
-                  ollama pull llama3.2:3b
-                </code>
-              </div>
-            </div>
-
-            {status.running && status.availableModels.length > 0 && (
-              <div>
-                <button
-                  onClick={() => setShowDetails(!showDetails)}
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                >
-                  {showDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  Available models: {status.availableModels.slice(0, 3).join(', ')}
-                </button>
-              </div>
-            )}
-
-            <div className="bg-black/30 rounded-xl p-4 border border-white/5">
-              <p className="text-xs text-slate-400 mb-2 font-semibold">
-                {status.running ? 'Step 2' : 'Step 3'} — Restart this page
-              </p>
-              <p className="text-xs text-slate-500">After pulling the model, click Retry below.</p>
-            </div>
-          </div>
-        </div>
-
-        <button
-          onClick={onRetry}
-          id="ollama-retry-btn"
-          className="btn-primary w-full mt-6 py-3"
-        >
-          <RefreshCw className="w-4 h-4" /> Retry Connection
-        </button>
-      </motion.div>
-    </div>
-  )
-}
-
 // ── Stage 1: Upload ───────────────────────────────────────────────────────────
 function UploadStep({ onSubmit, ollamaModel }: {
   onSubmit: (text: string, filename: string, role: string, jd: string) => void
@@ -361,7 +253,7 @@ function UploadStep({ onSubmit, ollamaModel }: {
         <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
           <Sparkles className="w-4 h-4 text-violet-400" />
           <span className="text-sm text-violet-300 font-medium">
-            Powered by {ollamaModel || OLLAMA_MODEL}
+            Powered by Grok AI (xAI)
           </span>
         </div>
         <h1 className="font-outfit text-3xl font-bold text-white mb-2">Start Your AI Interview</h1>
@@ -476,7 +368,7 @@ function LLMLoading({ title, subtitle, step }: { title: string; subtitle: string
         <div className="flex justify-center">
           <ThinkingDots />
         </div>
-        <p className="text-slate-600 text-xs mt-4">Using {OLLAMA_MODEL} · This may take 15–30s</p>
+        <p className="text-slate-600 text-xs mt-4">Using Grok 2 AI (xAI) · Cloud Inference</p>
       </motion.div>
     </div>
   )
@@ -981,7 +873,7 @@ function ResultsStep({
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
         <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
           <Award className="w-4 h-4 text-violet-400" />
-          <span className="text-sm text-violet-300">AI Interview Report — {OLLAMA_MODEL}</span>
+          <span className="text-sm text-violet-300">AI Interview Report — {GROK_MODEL}</span>
         </div>
         <h2 className="font-outfit text-3xl font-bold text-white">Your Results</h2>
       </motion.div>
@@ -1147,8 +1039,7 @@ function ResultsStep({
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function CandidateInterviewPage() {
   const { user } = useAuthStore()
-  const [stage, setStage] = useState<Stage>('checking_ollama')
-  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null)
+  const [stage, setStage] = useState<Stage>('upload')
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
   const [questions, setQuestions] = useState<InterviewQuestion[]>([])
   const [evals, setEvals] = useState<AnswerEvaluation[]>([])
@@ -1156,26 +1047,12 @@ export default function CandidateInterviewPage() {
   const [loadingMsg, setLoadingMsg] = useState({ title: '', subtitle: '', step: '' })
   const [jdRef, setJdRef] = useState('')
 
-  // Check Ollama on mount
-  const checkOllama = useCallback(async () => {
-    setStage('checking_ollama')
-    const status = await checkOllamaStatus()
-    setOllamaStatus(status)
-    if (status.running && status.modelFound) {
-      setStage('upload')
-    } else {
-      setStage('ollama_error')
-    }
-  }, [])
-
-  useEffect(() => { checkOllama() }, [checkOllama])
-
   // Step 1: Resume submitted → LLM analyze
   const handleUpload = async (resumeText: string, _filename: string, role: string, jd: string) => {
     setJdRef(jd)
     setLoadingMsg({
       title: 'Analyzing Your Resume',
-      subtitle: 'Llama 3.2 3B is reading your resume and JD...',
+      subtitle: 'Grok 2 AI (xAI) is analyzing your resume and JD...',
       step: 'Detecting experience level, skills, strengths & gaps',
     })
     setStage('analyzing')
@@ -1184,7 +1061,7 @@ export default function CandidateInterviewPage() {
       setAnalysis(res)
       setStage('analysis')
     } catch (err) {
-      alert(`Analysis failed: ${err instanceof Error ? err.message : err}\n\nMake sure Ollama is running with: ollama run llama3.2:3b`)
+      alert(`Analysis failed: ${err instanceof Error ? err.message : err}`)
       setStage('upload')
     }
   }
@@ -1260,7 +1137,7 @@ export default function CandidateInterviewPage() {
   const stageOrder = ['upload', 'analysis', 'interview', 'results']
   const currentStep = stageToStep[stage] || 'upload'
 
-  const isLoading = ['checking_ollama', 'analyzing', 'generating_qs', 'generating_report'].includes(stage)
+  const isLoading = ['analyzing', 'generating_qs', 'generating_report'].includes(stage)
 
   return (
     <div className="min-h-screen py-10 px-4">
@@ -1282,30 +1159,28 @@ export default function CandidateInterviewPage() {
         )}
       </div>
 
-      {/* Step tracker (only when not ollama error) */}
-      {stage !== 'ollama_error' && stage !== 'checking_ollama' && (
-        <div className="max-w-3xl mx-auto mb-10 flex items-center justify-center gap-0">
-          {stepLabels.map((s, i) => {
-            const idx = stageOrder.indexOf(s.id)
-            const cur = stageOrder.indexOf(currentStep)
-            const done = idx < cur
-            const active = s.id === currentStep
-            return (
-              <div key={s.id} className="flex items-center">
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  active ? 'bg-violet-500 text-white' : done ? 'text-emerald-400' : 'text-slate-500'
-                }`}>
-                  {done ? <CheckCircle2 className="w-3 h-3" /> : s.icon}
-                  <span className="hidden sm:inline">{s.label}</span>
-                </div>
-                {i < stepLabels.length - 1 && (
-                  <div className={`w-8 h-px mx-1 ${done ? 'bg-emerald-500/40' : 'bg-white/10'}`} />
-                )}
+      {/* Step tracker */}
+      <div className="max-w-3xl mx-auto mb-10 flex items-center justify-center gap-0">
+        {stepLabels.map((s, i) => {
+          const idx = stageOrder.indexOf(s.id)
+          const cur = stageOrder.indexOf(currentStep)
+          const done = idx < cur
+          const active = s.id === currentStep
+          return (
+            <div key={s.id} className="flex items-center">
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                active ? 'bg-violet-500 text-white' : done ? 'text-emerald-400' : 'text-slate-500'
+              }`}>
+                {done ? <CheckCircle2 className="w-3 h-3" /> : s.icon}
+                <span className="hidden sm:inline">{s.label}</span>
               </div>
-            )
-          })}
-        </div>
-      )}
+              {i < stepLabels.length - 1 && (
+                <div className={`w-8 h-px mx-1 ${done ? 'bg-emerald-500/40' : 'bg-white/10'}`} />
+              )}
+            </div>
+          )
+        })}
+      </div>
 
       {/* Stage renderer */}
       <AnimatePresence mode="wait">
@@ -1316,23 +1191,11 @@ export default function CandidateInterviewPage() {
           exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.25 }}
         >
-          {stage === 'checking_ollama' && (
-            <div className="max-w-md mx-auto text-center">
-              <div className="glass-card p-10">
-                <Loader2 className="w-10 h-10 text-violet-400 animate-spin mx-auto mb-4" />
-                <p className="text-white font-medium">Connecting to Ollama...</p>
-                <p className="text-slate-400 text-sm mt-1">Checking for {OLLAMA_MODEL}</p>
-              </div>
-            </div>
-          )}
-          {stage === 'ollama_error' && ollamaStatus && (
-            <OllamaErrorScreen status={ollamaStatus} onRetry={checkOllama} />
-          )}
-          {isLoading && !['checking_ollama', 'ollama_error'].includes(stage) && (
+          {isLoading && (
             <LLMLoading {...loadingMsg} />
           )}
           {stage === 'upload' && (
-            <UploadStep onSubmit={handleUpload} ollamaModel={ollamaStatus?.activeModel ?? null} />
+            <UploadStep onSubmit={handleUpload} ollamaModel="Grok 2 AI" />
           )}
           {stage === 'analysis' && analysis && (
             <AnalysisStep analysis={analysis} onStart={handleBegin} />

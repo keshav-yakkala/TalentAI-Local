@@ -7,7 +7,26 @@
  *   4. Final report generation
  */
 
+import { grokChat, GROK_MODEL } from './grokClient'
 import { ollamaChat, extractJSON, OLLAMA_MODEL } from './ollamaClient'
+
+export const ACTIVE_MODEL_NAME = 'Grok 2 (xAI)'
+
+async function aiChat(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  opts: { json?: boolean; timeout?: number; temperature?: number } = {}
+): Promise<string> {
+  try {
+    return await grokChat(messages, opts)
+  } catch (grokErr) {
+    console.warn('Grok AI call failed, falling back to Ollama / local heuristics:', grokErr)
+    try {
+      return await ollamaChat(messages, opts)
+    } catch {
+      throw grokErr
+    }
+  }
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -317,7 +336,7 @@ export async function analyzeResume(
   jd: string
 ): Promise<ResumeAnalysis> {
   try {
-    const raw = await ollamaChat([
+    const raw = await aiChat([
       { role: 'system', content: ANALYSIS_SYSTEM },
       { role: 'user', content: ANALYSIS_PROMPT(resumeText, jobRole, jd) },
     ], { json: true, timeout: 180_000, temperature: 0.3 })
@@ -327,10 +346,10 @@ export async function analyzeResume(
       return sanitizeAnalysis(parsed, jobRole, jd, resumeText)
     }
   } catch (err) {
-    console.warn('Ollama analysis timed out or failed, using local profile heuristic analysis:', err)
+    console.warn('AI analysis timed out or failed, using local profile heuristic analysis:', err)
   }
 
-  // Fallback resume analysis if Ollama is busy or times out
+  // Fallback resume analysis if AI is busy or times out
   const words = (resumeText || '').split(/\s+/).filter(Boolean)
   const candidateName = words.slice(0, 2).join(' ') || 'Candidate'
   const isDev = /developer|engineer|coder|programmer|software|data/i.test(jobRole)
@@ -416,7 +435,7 @@ export async function generateInterviewQuestions(
   let list: Partial<InterviewQuestion>[] = []
 
   try {
-    const raw = await ollamaChat([
+    const raw = await aiChat([
       { role: 'system', content: QUESTIONS_SYSTEM },
       { role: 'user', content: QUESTIONS_PROMPT(analysis, count, jd, seed) },
     ], { json: true, timeout: 60_000, temperature: 0.75 })
@@ -564,14 +583,14 @@ export async function evaluateAnswer(
 
   if (answer.trim()) {
     try {
-      const raw = await ollamaChat([
+      const raw = await aiChat([
         { role: 'system', content: EVAL_SYSTEM },
         { role: 'user', content: EVAL_PROMPT(question, answer, durationSec, analysis) },
       ], { json: true, timeout: 120_000, temperature: 0.2 })
 
       parsed = extractJSON<Partial<AnswerEvaluation>>(raw)
     } catch (err) {
-      console.warn('Ollama answer evaluation timed out or failed, using local score heuristic:', err)
+      console.warn('AI answer evaluation timed out or failed, using local score heuristic:', err)
     }
   }
 
@@ -659,14 +678,14 @@ export async function generateFinalReport(
 
   let parsed: Partial<InterviewReport> | null = null
   try {
-    const raw = await ollamaChat([
+    const raw = await aiChat([
       { role: 'system', content: REPORT_SYSTEM },
       { role: 'user', content: REPORT_PROMPT(analysis, questions, evals) },
     ], { json: true, timeout: 180_000, temperature: 0.3 })
 
     parsed = extractJSON<Partial<InterviewReport>>(raw)
   } catch (err) {
-    console.warn('Ollama report generation timed out or failed, using local report heuristic:', err)
+    console.warn('AI report generation timed out or failed, using local report heuristic:', err)
   }
 
   const grade: Grade = avgScore >= 90 ? 'A' : avgScore >= 75 ? 'B' : avgScore >= 60 ? 'C' : avgScore >= 45 ? 'D' : 'F'
