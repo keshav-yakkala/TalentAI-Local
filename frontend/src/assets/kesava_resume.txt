@@ -1,0 +1,42 @@
+Yakkala Kesava Sai Ayyappa
+kesavasaiayyappa_yakkala@srmap.edu.in | +91-9866699188
+
+PROJECTS
+TalentAI – Intelligent Hiring Assistant (Python, Streamlit, Llama 3, Whisper, Ollama)
+• Architected a full-stack GenAI application using Streamlit that automates resume screening and technical interviewing, reducing candidate evaluation time by 50% for 100+ applicants.
+• Integrated Llama 3 (LLM) for context-aware question generation and Whisper for real-time speech-to-text (ASR) analysis to autonomously assess candidate voice responses.
+• Engineered Ollama-based NLP pipelines for semantic extraction and automated feedback.
+
+Stock Price Prediction & Sentiment Analysis (Python, TensorFlow, Streamlit, LSTM)
+• Developed a real-time stock analysis dashboard using Python and Streamlit, integrating live market data via yfinance with interactive Plotly visualisations.
+• Built and trained an LSTM-based deep learning model to forecast 90-day stock price trends.
+• Implemented sentiment analysis using FinBERT and VADER on financial news data.
+
+SKILLS
+Programming Languages: Python, C, C++, JavaScript, Java
+GenAI & Models: Llama 3, Hugging Face Transformers, Prompt Engineering, RAG, Embeddings
+Agentic AI: LangChain, LangGraph, CrewAI, AutoGen, n8n, Make
+AI / ML Libraries: TensorFlow, Keras, PyTorch, Scikit-Learn, OpenCV, NLTK, NLP, Pandas, NumPy
+Tools: Streamlit, Docker, REST APIs, Plotly
+Databases: MySQL, MongoDB, ChromaDB
+Web: React.js, HTML, CSS
+
+WORK EXPERIENCE
+ZLTS (Jun 2026 – Present)
+AI Intern
+• Developed an end-to-end AI Context Oracle using LangGraph, LangChain, Ollama, RAG and ChromaDB, enabling intelligent document retrieval and context-aware responses from unstructured data.
+• Designed and integrated 40+ REST APIs with FastAPI, connecting AI services to the React frontend and streamlining real-time communication across product modules.
+
+Edunet Foundation (May 2024 – Jul 2024)
+ML Intern
+• Developed a predictive model for Employee Burnout using Machine Learning techniques.
+• Performed data preprocessing, visualisation, and feature analysis; improved model accuracy by 15% through iterative refinement.
+
+EDUCATION
+2022 – Present B.Tech in Computer Science, SRM University (CGPA: 8.71/10)
+
+ACHIEVEMENTS & RESEARCH
+• 9am Nova Coding Challenge – Advanced Skill Verified Badge (Mar 2026)
+• Hands On Internet of Things for Engineers – IoT Workshop 3rd Place (Mar 2024)
+• Research Paper: CPAT-HF: Clinical-Prior Guided Adaptive Transformer with Hierarchical Feedback
+• Research Paper: Cluster-CFS: Efficient Feature Selection via Clustering and CFS

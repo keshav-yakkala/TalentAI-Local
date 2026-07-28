@@ -10,6 +10,11 @@ import numpy as np
 import ollama
 import whisper
 
+@st.cache_resource
+def load_whisper_model():
+    """Load and cache the Whisper model to avoid repeated loading."""
+    return whisper.load_model("base")
+
 def setup_page():
     """Apply custom CSS and setup page (without setting page config)"""
     apply_custom_css()
@@ -18,138 +23,291 @@ def apply_custom_css(accent_color="#d32f2f"):
     st.markdown(
         f"""
         <style>
-        /* Main container */
-        .main {{
-            background-color: #000000 !important;
-            color: white !important;
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+        :root {{
+            --primary: {accent_color};
+            --primary-glow: {accent_color}33;
+            --bg-deep: #020617;
+            --glass-bg: rgba(15, 23, 42, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
         }}
-        /* Active tabs and highlights based on accent color */
+
+        * {{
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important;
+        }}
+
+        .stApp {{
+            background-color: var(--bg-deep) !important;
+            background-image: 
+                radial-gradient(circle at 0% 0%, {accent_color}15 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, {accent_color}10 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, #000000 0%, transparent 100%) !important;
+        }}
+
+        /* Glassmorphism card */
+        .card {{
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .card::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.03),
+                transparent
+            );
+            transition: 0.5s;
+        }}
+
+        .card:hover::before {{
+            left: 100%;
+        }}
+
+        .card:hover {{
+            border-color: {accent_color}4d;
+            transform: translateY(-4px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 20px {accent_color}1a;
+        }}
+
+        /* Buttons */
+        .stButton > button {{
+            background: linear-gradient(135deg, {accent_color} 0%, {accent_color}dd 100%) !important;
+            color: #fff !important;
+            border-radius: 14px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            padding: 0.75rem 2.5rem !important;
+            font-weight: 700 !important;
+            font-size: 1rem !important;
+            letter-spacing: 0.5px !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: 0 8px 16px {accent_color}22 !important;
+            text-transform: uppercase !important;
+        }}
+
+        .stButton > button:hover {{
+            transform: translateY(-2px) scale(1.02) !important;
+            box-shadow: 0 12px 24px {accent_color}44 !important;
+            filter: brightness(1.1);
+        }}
+
+        .stButton > button:active {{
+            transform: translateY(0) scale(0.98) !important;
+        }}
+
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 12px;
+            background-color: transparent !important;
+            padding: 10px 0 !important;
+        }}
+
+        .stTabs [data-baseweb="tab"] {{
+            height: auto !important;
+            background-color: rgba(255, 255, 255, 0.03) !important;
+            border-radius: 12px !important;
+            color: var(--text-dim) !important;
+            border: 1px solid var(--glass-border) !important;
+            padding: 12px 24px !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }}
+
         .stTabs [aria-selected="true"] {{
-            background-color: #000000 !important;
-            border-bottom: 3px solid {accent_color} !important;
+            background: {accent_color}22 !important;
             color: {accent_color} !important;
+            border: 1px solid {accent_color} !important;
+            box-shadow: 0 0 15px {accent_color}22 !important;
         }}
-        /* Buttons styled with accent color */
-        .stButton button {{
-            background-color: {accent_color} !important;
+
+        /* Inputs */
+        .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {{
+            background-color: rgba(15, 23, 42, 0.8) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: 14px !important;
             color: white !important;
+            padding: 12px !important;
+            transition: all 0.3s ease !important;
         }}
-        .stButton button:hover {{
-            filter: brightness(85%);
+
+        .stTextInput input:focus, .stTextArea textarea:focus {{
+            border-color: {accent_color} !important;
+            box-shadow: 0 0 0 2px {accent_color}33 !important;
+            background-color: rgba(15, 23, 42, 1) !important;
         }}
-        /* Warning message */
-        div.stAlert {{
-            background-color: #450000 !important;
-            color: white !important;
+
+        /* Skill tags */
+        .skill-tag {{
+            display: inline-flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            color: {accent_color};
+            padding: 8px 18px;
+            border-radius: 12px;
+            margin: 6px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            border: 1px solid {accent_color}44;
+            transition: all 0.3s ease;
         }}
-        /* Input fields */
-        .stTextInput input, .stTextArea textarea, .stSelectbox div {{
-            background-color: #222222 !important;
-            color: white !important;
+
+        .skill-tag:hover {{
+            background: {accent_color};
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px {accent_color}44;
         }}
-        /* Horizontal rule black and accent color gradient */
+
+        .skill-tag.missing {{
+            background: rgba(255, 255, 255, 0.02);
+            color: #64748b;
+            border-color: var(--glass-border);
+        }}
+
+        /* Header styling */
+        .main-header {{
+            padding: 4rem 0 3rem 0;
+            background: radial-gradient(circle at center, {accent_color}08 0%, transparent 70%);
+        }}
+
+        h1 {{
+            font-weight: 800 !important;
+            letter-spacing: -2px !important;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem !important;
+        }}
+
+        /* Metrics */
+        [data-testid="stMetricValue"] {{
+            font-weight: 800 !important;
+            color: {accent_color} !important;
+            font-size: 2.5rem !important;
+        }}
+
+        /* Expander */
+        .streamlit-expanderHeader {{
+            background-color: rgba(255, 255, 255, 0.03) !important;
+            border-radius: 14px !important;
+            border: 1px solid var(--glass-border) !important;
+            padding: 1rem !important;
+            font-weight: 600 !important;
+        }}
+
+        /* Horizontal Rule */
         hr {{
             border: none;
-            height: 2px;
-            background-image: linear-gradient(to right, black 50%, {accent_color} 50%);
+            height: 1px;
+            background: linear-gradient(to right, transparent, {accent_color}44, transparent);
+            margin: 3rem 0;
         }}
-        /* General markdown text */
-        .stMarkdown, .stMarkdown p {{
-            color: white !important;
-        }}
-        /* Skill tags styling */
-        .skill-tag {{
-            display: inline-block;
-            background-color: {accent_color};
-            color: white;
-            padding: 5px 12px;
-            border-radius: 15px;
-            margin: 5px;
-            font-weight: bold;
-        }}
-        .skill-tag.missing {{
-            background-color: #444;
-            color: #ccc;
-        }}
-        /* Horizontal layout for Strengths and Improvements */
-        .strengths-improvements {{
-            display: flex;
-            gap: 20px;
-        }}
-        .strengths-improvements > div {{
-            flex: 1;
-        }}
-        /* Card styling for sections */
-        .card {{
-            background-color: #111111;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-left: 4px solid {accent_color};
-        }}
-        /* Improvement suggestion styling */
-        .improvement-item {{
-            background-color: #222222;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }}
-        /* Before-after comparison */
-        .comparison-container {{
-            display: flex;
-            gap: 20px;
-            margin-top: 15px;
-        }}
-        .comparison-box {{
-            flex: 1;
-            background-color: #333333;
-            padding: 15px;
-            border-radius: 5px;
-        }}
-        /* Weakness detail styling */
+        
         .weakness-detail {{
-            background-color: #330000;
-            padding: 10px 15px;
-            margin: 5px 0;
-            border-radius: 5px;
-            border-left: 3px solid #ff6666;
+            background: rgba(239, 68, 68, 0.05);
+            border-left: 4px solid #ef4444;
+            padding: 1.5rem;
+            border-radius: 14px;
+            margin: 1rem 0;
+            color: #fca5a5;
         }}
-        /* Solution styling */
+        
         .solution-detail {{
-            background-color: #003300;
-            padding: 10px 15px;
-            margin: 5px 0;
-            border-radius: 5px;
-            border-left: 3px solid #66ff66;
+            background: rgba(34, 197, 94, 0.05);
+            border-left: 4px solid #22c55e;
+            padding: 1.5rem;
+            border-radius: 14px;
+            margin: 1rem 0;
+            color: #86efac;
         }}
-        /* Example detail styling */
-        .example-detail {{
-            background-color: #000033;
-            padding: 10px 15px;
-            margin: 5px 0;
-            border-radius: 5px;
-            border-left: 3px solid #6666ff;
-        }}
-        /* Download button styling */
+        
         .download-btn {{
-            display: inline-block;
-            background-color: {accent_color};
-            color: white;
-            padding: 8px 16px;
-            border-radius: 5px;
-            text-decoration: none;
-            margin: 10px 0;
-            text-align: center;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            color: white !important;
+            padding: 14px 28px;
+            border-radius: 14px;
+            text-decoration: none !important;
+            margin: 15px 0;
+            font-weight: 700;
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            gap: 12px;
+            width: 100%;
         }}
+
         .download-btn:hover {{
-            filter: brightness(85%);
+            background: {accent_color}1a;
+            border-color: {accent_color};
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
         }}
-        /* Pie chart styling */
-        .pie-chart-container {{
-            padding: 10px;
-            background-color: #111111;
+        
+        .stMetric {{
+            background: rgba(255, 255, 255, 0.02);
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+        }}
+
+        /* Animations */
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(20px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        @keyframes pulse-glow {{
+            0% {{ box-shadow: 0 0 5px {accent_color}22; }}
+            50% {{ box-shadow: 0 0 20px {accent_color}44; }}
+            100% {{ box-shadow: 0 0 5px {accent_color}22; }}
+        }}
+
+        .card {{
+            animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }}
+
+        .main-header {{
+            animation: fadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }}
+
+        .stButton > button {{
+            animation: fadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
+        }}
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {{
+            width: 8px;
+            height: 8px;
+        }}
+        ::-webkit-scrollbar-track {{
+            background: var(--bg-deep);
+        }}
+        ::-webkit-scrollbar-thumb {{
+            background: {accent_color}33;
             border-radius: 10px;
-            margin-bottom: 15px;
+        }}
+        ::-webkit-scrollbar-thumb:hover {{
+            background: {accent_color}66;
         }}
         </style>
         """,
@@ -158,20 +316,31 @@ def apply_custom_css(accent_color="#d32f2f"):
 
 def display_header():
     try:
-        with open("euron.jpg", "rb") as img_file:
-            logo_base64 = base64.b64encode(img_file.read()).decode()
-        logo_html = f'<img src="data:image/jpeg;base64,{logo_base64}" alt="Euron Logo" class="logo-image" style="max-height: 100px;">'
-    except:
-        logo_html = '<div style="font-size: 50px; text-align: center;"></div>'
+        # Try multiple potential logo paths
+        logo_path = None
+        for path in ["euron.png", "euron.jpg", "logo.png"]:
+            if os.path.exists(path):
+                logo_path = path
+                break
+        
+        if logo_path:
+            with open(logo_path, "rb") as img_file:
+                logo_base64 = base64.b64encode(img_file.read()).decode()
+            logo_html = f'<img src="data:image/png;base64,{logo_base64}" alt="Euron Logo" style="max-height: 120px; filter: drop-shadow(0 0 10px rgba(211, 47, 47, 0.4));">'
+        else:
+            logo_html = '<h1 style="font-size: 3rem; margin: 0;">EURON</h1>'
+    except Exception as e:
+        logo_html = '<div style="font-size: 50px; text-align: center;">EURON</div>'
+        
     st.markdown(f"""
     <div class="main-header">
-        <div class="header-container">
-            <div class="logo-container" style="text-align: center; margin-bottom: 20px;">
+        <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+            <div class="logo-container" style="margin-bottom: 1.5rem; animation: pulse-glow 3s infinite ease-in-out; border-radius: 50%;">
                 {logo_html}
             </div>
-            <div class="title-container" style="text-align: center;">
-                <h1>Euron Recruitment Agent</h1>
-                <p>Smart Resume Analysis & Interview Preparation System</p>
+            <div class="title-container">
+                <h1 style="margin-bottom: 0.5rem;">Euron Recruitment Agent</h1>
+                <p style="font-size: 1.2rem; color: #888; font-weight: 500;">AI-Powered Resume Insight & Professional Interview Prep</p>
             </div>
         </div>
     </div>
@@ -181,11 +350,12 @@ def setup_sidebar():
     with st.sidebar:
         st.header("Configuration")
         st.subheader("Theme")
-        theme_color = st.color_picker("Accent Color", "#d32f2f")
+        theme_color = st.color_picker("Accent Color", "#7C3AED")
         st.markdown(f"""
         <style>
         .stButton button, .main-header, .stTabs [aria-selected="true"] {{
-            background-color: {theme_color} !important;
+            background-color: {theme_color}22 !important;
+            color: {theme_color} !important;
             border-color: {theme_color} !important;
         }}
         </style>
@@ -227,41 +397,36 @@ def resume_upload_section():
         <p>Supported format: PDF</p>
     </div>
     """, unsafe_allow_html=True)
-    uploaded_resume = st.file_uploader("", type=["pdf"], label_visibility="collapsed")
+    uploaded_resume = st.file_uploader("Upload Your Resume", type=["pdf"], label_visibility="collapsed")
     return uploaded_resume
 
-def create_score_pie_chart(score):
+def create_score_pie_chart(score, primary_color="#7C3AED"):
     """Create a professional pie chart for the score visualization"""
-    fig, ax = plt.subplots(figsize=(4, 4), facecolor='#111111')
+    fig, ax = plt.subplots(figsize=(4, 4), facecolor='none')
     # Data
     sizes = [score, 100 - score]
-    labels = ['', '']  # We'll use annotation instead
-    colors = ["#d32f2f", "#333333"]
-    explode = (0.05, 0)  # explode the 1st slice (Score)
+    colors = [primary_color, "rgba(255, 255, 255, 0.05)"]
+    
     # Plot
     wedges, texts = ax.pie(
         sizes,
-        labels=labels,
         colors=colors,
-        explode=explode,
         startangle=90,
-        wedgeprops={'width': 0.5, 'edgecolor': 'black', 'linewidth': 1}
+        wedgeprops={'width': 0.25, 'edgecolor': 'none', 'antialiased': True}
     )
-    # Draw a circle in the center to make it a donut chart
-    centre_circle = plt.Circle((0, 0), 0.25, fc='#111111')
-    ax.add_artist(centre_circle)
+    
     # Equal aspect ratio ensures that pie is drawn as a circle
     ax.set_aspect('equal')
-    ax.text(0, 0, f"{score}%", ha='center', va='center', fontsize=24, fontweight='bold', color='white')
+    ax.text(0, 0, f"{score}%", ha='center', va='center', fontsize=32, fontweight='800', color='white')
+    
     # Add pass/fail indicator
-    status = "PASS" if score >= 75 else "FAIL"
-    status_color = "#4CAF50" if score >= 75 else "#d32f2f"
-    ax.text(0, -0.15, status, ha='center', va='center', fontsize=14, fontweight='bold', color=status_color)
-    ax.set_facecolor('#111111')
+    status = "QUALIFIED" if score >= 75 else "NOT QUALIFIED"
+    status_color = "#22c55e" if score >= 75 else "#ef4444"
+    ax.text(0, -0.3, status, ha='center', va='center', fontsize=12, fontweight='700', color=status_color, alpha=0.9)
     return fig
 
 
-def display_analysis_results(analysis_result):
+def display_analysis_results(analysis_result, theme_color="#7C3AED"):
     if not analysis_result:
         return
 
@@ -271,20 +436,20 @@ def display_analysis_results(analysis_result):
     detailed_weaknesses = analysis_result.get("detailed_weaknesses", [])
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div style="text-align: right; font-size: 0.8rem; color: #888; margin-bottom: 10px;">Powered by Euron Recruitment</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align: right; font-size: 0.8rem; color: #64748b; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Analysis Engine v1.0</div>', unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1, 2])
+    col1, col2 = st.columns([1, 1.5])
     with col1:
-        st.metric("Overall Score", f"{overall_score}/100")
-        fig = create_score_pie_chart(overall_score)
+        fig = create_score_pie_chart(overall_score, theme_color)
         st.pyplot(fig)
 
     with col2:
         if selected:
-            st.markdown("<h2 style='color: #4CAF50;'>🎉 Congratulations! You have been shortlisted.</h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='color: #22c55e; margin-top: 0;'>🎉 Shortlisted for Interview</h2>", unsafe_allow_html=True)
         else:
-            st.markdown("<h2 style='color:#d32f2f;'>❌ Unfortunately, you were not selected.</h2>", unsafe_allow_html=True)
-        st.write(analysis_result.get('reasoning', ''))
+            st.markdown(f"<h2 style='color: #ef4444; margin-top: 0;'>❌ Profile Not Shortlisted</h2>", unsafe_allow_html=True)
+        
+        st.markdown(f"<p style='font-size: 1.1rem; line-height: 1.6; color: #cbd5e1;'>{analysis_result.get('reasoning', '')}</p>", unsafe_allow_html=True)
 
     st.markdown('<hr>', unsafe_allow_html=True)
     st.markdown('<div class="strengths-improvements">', unsafe_allow_html=True)
@@ -417,7 +582,7 @@ def resume_qa_section(has_resume, ask_question_func=None):
         for question in example_questions:
             if st.button(question, key=f"q_{question}"):
                 st.session_state.current_question = question
-                st.experimental_rerun()
+                st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -461,107 +626,116 @@ def interview_questions_section(has_resume, generate_questions_func=None):
 
     # Generate questions if button is clicked
     generate_button = st.button("Generate Interview Questions")
-    if generate_button or st.session_state['interview_questions']:
-        if generate_questions_func and generate_button:
+    if generate_button:
+        if generate_questions_func:
             with st.spinner("Generating personalized interview questions..."):
                 questions = generate_questions_func(question_types, difficulty, num_questions)
-                st.session_state['interview_questions'] = questions
-                st.session_state['question_params'] = current_params
-                st.session_state['interview_results'] = {}  # Reset results for new questions
+                if questions:
+                    st.session_state['interview_questions'] = questions
+                    st.session_state['question_params'] = current_params
+                    st.session_state['interview_results'] = {}  # Reset results for new questions
+                else:
+                    st.error("Failed to generate interview questions. Please ensure you have uploaded and analyzed a resume first.")
 
-        # Display questions if we have them
-        if st.session_state['interview_questions']:
-            questions = st.session_state['interview_questions']
-            params = st.session_state['question_params']
-            
-            download_content = f"# Euron Recruitment Interview Questions\n\n"
-            download_content += f"Difficulty: {params['difficulty']}\n"
-            download_content += f"Types: {', '.join(params['types'])}\n\n"
+    # Display questions if we have them
+    if st.session_state['interview_questions']:
+        questions = st.session_state['interview_questions']
+        params = st.session_state.get('question_params', current_params)
+        
+        st.success(f"Generated {len(questions)} interview questions ({params.get('difficulty', difficulty)} level).")
+        
+        download_content = f"# Euron Recruitment Interview Questions\n\n"
+        download_content += f"Difficulty: {params.get('difficulty', difficulty)}\n"
+        download_content += f"Types: {', '.join(params.get('types', question_types))}\n\n"
 
-            for i, (q_type, question) in enumerate(questions):
-                with st.expander(f"{q_type}: {question[:50]}...", expanded=True):
-                    st.write(f"**Question {i+1}:** {question}")
-                    st.markdown("**Student Answer (Voice):**")
-                    
-                    # Create unique key for each question's audio recorder
+        for i, (q_type, question) in enumerate(questions):
+            with st.expander(f"Question {i+1} [{q_type}]: {question[:60]}...", expanded=True):
+                st.markdown(f"**Type:** `{q_type}`")
+                st.markdown(f"**Question {i+1}:** {question}")
+                
+                if q_type == "Coding":
+                    st.code("# Write your code solution here", language="python")
+
+                col_voice, col_text = st.columns(2)
+                
+                with col_voice:
+                    st.markdown("**Option 1: Voice Answer**")
                     audio_key = f"audio_recorder_{i}"
-                    
-
                     audio = audiorecorder("Click to record", "Click to stop recording", key=audio_key)
-                    if audio is not None:
+                    if audio is not None and len(audio) > 0:
                         audio_bytes = io.BytesIO()
                         audio.export(audio_bytes, format="wav")
                         st.audio(audio_bytes.getvalue(), format='audio/wav')
                                         
-                        
-                        # Save the audio
                         audio_path = f"answer_q{i+1}.wav"
                         audio.export(audio_path, format="wav")
-                        st.success(f"Audio answer for Q{i+1} saved.")
+                        st.success(f"Audio recorded for Q{i+1}.")
                         
-                        # Transcribe using Whisper
                         try:
-                            with st.spinner("Transcribing audio..."):
-                                model = whisper.load_model("base")
-                                transcription = model.transcribe(audio_path)
+                            with st.spinner("Transcribing audio answer..."):
+                                whisper_model = load_whisper_model()
+                                transcription = whisper_model.transcribe(audio_path)
                                 transcript = transcription['text']
                                 st.markdown(f"**Transcript:** {transcript}")
-                                
-                                # Store transcript in session state
                                 st.session_state['interview_results'][f'transcript_{i}'] = transcript
                         except Exception as e:
                             st.error(f"Transcription error: {e}")
                             transcript = None
                         
-                        # Evaluate with LLM (Ollama)
                         if transcript:
                             try:
-                                with st.spinner("Evaluating answer..."):
-                                    import ollama
-                                    prompt = f"Is the following answer relevant and correct for the question: '{question}'? Answer: '{transcript}'. Reply only 'yes' or 'no'."
+                                with st.spinner("Evaluating answer with AI..."):
+                                    prompt = f"Evaluate this candidate's answer for the question: '{question}'\nCandidate Answer: '{transcript}'.\nProvide a rating (Correct/Partially Correct/Incorrect) and a brief 1-2 sentence feedback explanation."
                                     response = ollama.chat(model='llama3', messages=[{"role": "user", "content": prompt}])
-                                    llm_reply = response['message']['content'].strip().lower()
+                                    eval_text = response['message']['content'].strip()
                                     
-                                    if 'yes' in llm_reply:
-                                        result = '✅ Yes'
-                                    elif 'no' in llm_reply:
-                                        result = '❌ No'
-                                    else:
-                                        result = f'🤔 {llm_reply}'
-                                    
-                                    st.session_state['interview_results'][f'result_{i}'] = result
-                                    st.markdown(f"**Evaluation:** {result}")
+                                    st.session_state['interview_results'][f'result_{i}'] = eval_text
                             except Exception as e:
                                 st.error(f"LLM evaluation error: {e}")
-                    
-                    # Show previous results if they exist
-                    elif f'result_{i}' in st.session_state['interview_results']:
-                        if f'transcript_{i}' in st.session_state['interview_results']:
-                            st.markdown(f"**Previous Transcript:** {st.session_state['interview_results'][f'transcript_{i}']}")
-                        st.markdown(f"**Previous Evaluation:** {st.session_state['interview_results'][f'result_{i}']}")
-                    
-                    if q_type == "Coding":
-                        st.code("# Write your solution here", language="python")
 
-                download_content += f"## {i + 1}. {q_type} Question\n\n"
-                download_content += f"{question}\n\n"
-                if q_type == "Coding":
-                    download_content += "```python\n# Write your solution here\n```\n\n"
+                with col_text:
+                    st.markdown("**Option 2: Written Answer**")
+                    text_answer = st.text_area(f"Type your answer for Q{i+1}:", key=f"text_input_{i}", placeholder="Type your answer here...", height=100)
+                    submit_text = st.button(f"Evaluate Written Answer Q{i+1}", key=f"submit_text_{i}")
 
-            download_content += "\n--\nQuestions generated by Euron Recruitment Agent"
+                    if submit_text and text_answer.strip():
+                        transcript = text_answer.strip()
+                        st.session_state['interview_results'][f'transcript_{i}'] = transcript
+                        try:
+                            with st.spinner("Evaluating written answer with AI..."):
+                                prompt = f"Evaluate this candidate's answer for the question: '{question}'\nCandidate Answer: '{transcript}'.\nProvide a rating (Correct/Partially Correct/Incorrect) and a brief 1-2 sentence feedback explanation."
+                                response = ollama.chat(model='llama3', messages=[{"role": "user", "content": prompt}])
+                                eval_text = response['message']['content'].strip()
+                                st.session_state['interview_results'][f'result_{i}'] = eval_text
+                                st.success(f"Answer submitted & evaluated!")
+                        except Exception as e:
+                            st.error(f"LLM evaluation error: {e}")
 
-            st.markdown("---")
-            questions_bytes = download_content.encode()
-            b64 = base64.b64encode(questions_bytes).decode()
-            href = f'<a class="download-btn" href="data:text/markdown;base64,{b64}" download="euron_interview_questions.md">Download All Questions</a>'
-            st.markdown(href, unsafe_allow_html=True)
-            
-            # Add a button to clear questions
-            if st.button("Clear Questions"):
-                st.session_state['interview_questions'] = []
-                st.session_state['interview_results'] = {}
-                st.session_state['question_params'] = {}
-                st.experimental_rerun()
+                # Show current evaluation results if available
+                if f'result_{i}' in st.session_state['interview_results']:
+                    st.markdown("---")
+                    if f'transcript_{i}' in st.session_state['interview_results']:
+                        st.markdown(f"**Submitted Answer:** {st.session_state['interview_results'][f'transcript_{i}']}")
+                    st.markdown(f"**AI Evaluation & Feedback:**\n\n{st.session_state['interview_results'][f'result_{i}']}")
+
+            download_content += f"## {i + 1}. [{q_type}] Question\n\n"
+            download_content += f"{question}\n\n"
+            if q_type == "Coding":
+                download_content += "```python\n# Write your solution here\n```\n\n"
+
+        download_content += "\n---\nQuestions generated by Euron Recruitment Agent"
+
+        st.markdown("---")
+        questions_bytes = download_content.encode()
+        b64 = base64.b64encode(questions_bytes).decode()
+        href = f'<a class="download-btn" href="data:text/markdown;base64,{b64}" download="euron_interview_questions.md">Download All Questions (.md)</a>'
+        st.markdown(href, unsafe_allow_html=True)
+        
+        if st.button("Clear Questions"):
+            st.session_state['interview_questions'] = []
+            st.session_state['interview_results'] = {}
+            st.session_state['question_params'] = {}
+            st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
 
