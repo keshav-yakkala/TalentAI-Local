@@ -586,38 +586,133 @@ export async function evaluateAnswer(
       const raw = await aiChat([
         { role: 'system', content: EVAL_SYSTEM },
         { role: 'user', content: EVAL_PROMPT(question, answer, durationSec, analysis) },
-      ], { json: true, timeout: 120_000, temperature: 0.2 })
+      ], { json: true, timeout: 60_000, temperature: 0.2 })
 
       parsed = extractJSON<Partial<AnswerEvaluation>>(raw)
     } catch (err) {
-      console.warn('AI answer evaluation timed out or failed, using local score heuristic:', err)
+      console.warn('AI answer evaluation fallback active:', err)
     }
   }
 
-  const wordCount = answer.trim().split(/\s+/).filter(Boolean).length
-  const heuristicScore = !answer.trim() ? 0 : Math.min(95, Math.max(50, wordCount * 2 + 50))
-  const clamp = (v: unknown, def = heuristicScore) => typeof v === 'number' ? Math.min(100, Math.max(0, v)) : def
+  const text = answer.trim()
+  const words = text.split(/\s+/).filter(Boolean)
+  const wordCount = words.length
+
+  // If answer is empty or skipped
+  if (wordCount === 0) {
+    return {
+      question_id: question.id,
+      sequence: question.sequence,
+      score: 0,
+      clarity: 0,
+      depth: 0,
+      relevance: 0,
+      communication: 0,
+      feedback: 'Question was skipped without an answer.',
+      positive_points: [],
+      improvement_points: ['Attempt all questions to demonstrate your domain knowledge.'],
+      ideal_answer_hint: `An ideal answer for ${analysis.role} would walk through your practical experience and approach.`,
+    }
+  }
+
+  // Detect technical keywords and candidate skills in the answer text
+  const lowerText = text.toLowerCase()
+  const allKnownSkills = Array.from(new Set([
+    ...analysis.skills_detected,
+    ...analysis.skills_required,
+    ...analysis.matched_skills,
+    'python', 'react', 'fastapi', 'docker', 'pytorch', 'tensorflow', 'rag', 'langgraph',
+    'ollama', 'llama', 'rest', 'api', 'lstm', 'nlp', 'git', 'sql', 'model', 'data',
+    'analysis', 'testing', 'architecture', 'optimization', 'accuracy', 'dataset', 'eda'
+  ]))
+
+  const techMatches = allKnownSkills.filter(s => lowerText.includes(s.toLowerCase()))
+
+  // Detect numbers, percentages, metrics in answer
+  const metricMatches = text.match(/\b\d+(?:%|\+|\s*year|\s*days|\s*st|\s*nd|\s*rd|\s*th)?\b/gi) || []
+
+  // Detect action verbs
+  const actionVerbs = ['built', 'developed', 'architected', 'engineered', 'implemented', 'designed', 'created', 'improved', 'managed', 'led', 'analyzed', 'worked', 'trained', 'used']
+  const actionMatches = actionVerbs.filter(v => lowerText.includes(v))
+
+  // Calculate dynamic content scores
+  let clarityScore = Math.min(98, Math.max(45, 55 + (wordCount > 25 ? 15 : wordCount > 10 ? 8 : 0) + (actionMatches.length > 0 ? 10 : 0)))
+  let depthScore = Math.min(98, Math.max(35, 45 + (techMatches.length * 8) + (metricMatches.length * 10) + (wordCount > 40 ? 12 : 0)))
+  let relevanceScore = Math.min(98, Math.max(50, 60 + (techMatches.length * 6) + (lowerText.includes(analysis.role.toLowerCase()) ? 12 : 5)))
+  let commScore = Math.min(98, Math.max(50, 60 + (wordCount > 30 ? 15 : wordCount > 15 ? 8 : 0) + (actionMatches.length * 5)))
+
+  // Calculate overall composite score
+  let compositeScore = Math.round((clarityScore * 0.25) + (depthScore * 0.35) + (relevanceScore * 0.25) + (commScore * 0.15))
+
+  // If LLM returned valid scores, calibrate with parsed score
+  if (parsed && typeof parsed.score === 'number' && parsed.score > 0) {
+    compositeScore = Math.min(100, Math.max(0, parsed.score))
+    clarityScore = typeof parsed.clarity === 'number' ? parsed.clarity : clarityScore
+    depthScore = typeof parsed.depth === 'number' ? parsed.depth : depthScore
+    relevanceScore = typeof parsed.relevance === 'number' ? parsed.relevance : relevanceScore
+    commScore = typeof (parsed as Record<string, unknown>).communication === 'number' ? (parsed as Record<string, unknown>).communication as number : commScore
+  }
+
+  // Dynamic feedback text referencing actual candidate answer
+  let feedbackText = parsed?.feedback
+  if (!feedbackText || typeof feedbackText !== 'string') {
+    if (wordCount < 15) {
+      feedbackText = `The candidate gave a brief ${wordCount}-word response for ${analysis.role}. While relevant, expanding with specific project details will significantly improve answer depth.`
+    } else if (techMatches.length > 0) {
+      feedbackText = `The candidate provided a well-structured response highlighting hands-on work with ${techMatches.slice(0, 3).join(', ')}. The response aligns well with expectations for ${analysis.role}.`
+    } else {
+      feedbackText = `The candidate clearly explained their approach to the question. Demonstrating specific quantifiable project metrics will further enhance technical credibility.`
+    }
+  }
+
+  // Dynamic positive points
+  let positivePoints = Array.isArray(parsed?.positive_points) && parsed.positive_points.length > 0 ? parsed.positive_points : []
+  if (positivePoints.length === 0) {
+    if (techMatches.length > 0) {
+      positivePoints.push(`Demonstrated familiarity with key domain tools: ${techMatches.slice(0, 3).join(', ')}`)
+    }
+    if (metricMatches.length > 0) {
+      positivePoints.push(`Included quantifiable project details (${metricMatches.slice(0, 2).join(', ')})`)
+    }
+    if (actionMatches.length > 0) {
+      positivePoints.push(`Used clear action-oriented articulation (${actionMatches.slice(0, 2).join(', ')})`)
+    }
+    if (positivePoints.length === 0) {
+      positivePoints.push(`Articulated a clear and logical response for ${analysis.role}`)
+    }
+  }
+
+  // Dynamic improvement points
+  let improvementPoints = Array.isArray(parsed?.improvement_points) && parsed.improvement_points.length > 0 ? parsed.improvement_points : []
+  if (improvementPoints.length === 0) {
+    if (metricMatches.length === 0) {
+      improvementPoints.push('Provide concrete, quantifiable project metrics achieved (e.g. % accuracy, scale, latency reduction)')
+    }
+    if (wordCount < 25) {
+      improvementPoints.push(`Elaborate further on technical architecture and tools relevant to ${analysis.role}`)
+    }
+    if (improvementPoints.length === 0) {
+      improvementPoints.push(`Highlight how your specific ${analysis.experience_level} experience prepares you for senior responsibilities`)
+    }
+  }
+
+  let idealHint = parsed?.ideal_answer_hint
+  if (!idealHint || typeof idealHint !== 'string') {
+    idealHint = `An ideal answer for ${analysis.role} would combine the STAR framework (Situation, Task, Action, Result) with specific metric outcomes.`
+  }
 
   return {
     question_id: question.id,
     sequence: question.sequence,
-    score: clamp(parsed?.score),
-    clarity: clamp(parsed?.clarity),
-    depth: clamp(parsed?.depth),
-    relevance: clamp(parsed?.relevance),
-    communication: clamp((parsed as Record<string, unknown>)?.communication),
-    feedback: typeof parsed?.feedback === 'string' ? parsed.feedback : (
-      !answer.trim() ? 'Question was skipped.' : 'Good response provided. Answer addresses key aspects of the question.'
-    ),
-    positive_points: Array.isArray(parsed?.positive_points) && parsed.positive_points.length > 0
-      ? parsed.positive_points
-      : ['Clear communication', 'Relevant context provided'],
-    improvement_points: Array.isArray(parsed?.improvement_points) && parsed.improvement_points.length > 0
-      ? parsed.improvement_points
-      : ['Elaborate with specific metric outcomes or examples'],
-    ideal_answer_hint: typeof parsed?.ideal_answer_hint === 'string' && parsed.ideal_answer_hint
-      ? parsed.ideal_answer_hint
-      : `An ideal answer for ${analysis.role} would include concrete examples and step-by-step methodology.`,
+    score: compositeScore,
+    clarity: clarityScore,
+    depth: depthScore,
+    relevance: relevanceScore,
+    communication: commScore,
+    feedback: feedbackText,
+    positive_points: positivePoints,
+    improvement_points: improvementPoints,
+    ideal_answer_hint: idealHint,
   }
 }
 
